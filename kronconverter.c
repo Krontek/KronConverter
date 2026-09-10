@@ -5,6 +5,10 @@
 
 #include "kronconverter.h"
 
+#include <stdio.h>     /* snprintf — the STRING section */
+#include <stdlib.h>    /* strtod   — the STRING section */
+#include <string.h>    /* strlen/memcpy */
+
 /*===========================================================================
  * FROM BOOL
  * true → 1, false → 0
@@ -288,3 +292,160 @@ int8_t   KRON_LREAL_TO_INT8  (double v) { return (int8_t)v;        }
 int16_t  KRON_LREAL_TO_INT16 (double v) { return (int16_t)v;       }
 int32_t  KRON_LREAL_TO_INT32 (double v) { return (int32_t)v;       }
 float    KRON_LREAL_TO_REAL  (double v) { return (float)v;         }
+
+/*===========================================================================
+ * STRING conversion  (IEC X_TO_Y for text)
+ *
+ * FROM_STRING parses a leading number and yields 0 when there is none.
+ * TO_STRING writes into a caller-owned buffer, always NUL-terminated,
+ * truncating when the text does not fit, and returns that same pointer.
+ * See the STRING section of kronconverter.h for the rationale.
+ *===========================================================================*/
+
+/* Copy into a fixed buffer, always NUL-terminated, truncating if needed. */
+static char *__kron_strcpy(char *dst, size_t n, const char *src)
+{
+    size_t len;
+    if (!dst || n == 0) return dst;
+    if (!src) { dst[0] = '\0'; return dst; }
+    len = strlen(src);
+    if (len > n - 1) len = n - 1;
+    memcpy(dst, src, len);
+    dst[len] = '\0';
+    return dst;
+}
+
+/* Leading number in text, 0 when there is none. */
+static double __kron_str_num(const char *s)
+{
+    char *end = NULL;
+    double v;
+    if (!s || !*s) return 0.0;
+    v = strtod(s, &end);
+    return (end == s) ? 0.0 : v;
+}
+
+bool KRON_STRING_TO_BOOL(const char *s)
+{
+    /* TRUE / true / 1 / any non-zero number is true; everything else false. */
+    if (!s || !*s) return false;
+    while (*s == ' ' || *s == '\t') s++;
+    if ((s[0] == 'T' || s[0] == 't') && (s[1] == 'R' || s[1] == 'r')) return true;
+    if ((s[0] == 'F' || s[0] == 'f')) return false;
+    return __kron_str_num(s) != 0.0;
+}
+
+uint8_t KRON_STRING_TO_BYTE(const char *s)
+{
+    double v = __kron_str_num(s);
+    if (v <= 0) return (uint8_t)0;
+    if (v >= 255) return (uint8_t)255;
+    return (uint8_t)v;
+}
+
+uint16_t KRON_STRING_TO_WORD(const char *s)
+{
+    double v = __kron_str_num(s);
+    if (v <= 0) return (uint16_t)0;
+    if (v >= 65535) return (uint16_t)65535;
+    return (uint16_t)v;
+}
+
+uint32_t KRON_STRING_TO_DWORD(const char *s)
+{
+    double v = __kron_str_num(s);
+    if (v <= 0) return (uint32_t)0;
+    if (v >= 4294967295.0) return (uint32_t)4294967295.0;
+    return (uint32_t)v;
+}
+
+int16_t KRON_STRING_TO_INT16(const char *s)
+{
+    double v = __kron_str_num(s);
+    if (v <= -32768) return (int16_t)-32768;
+    if (v >= 32767) return (int16_t)32767;
+    return (int16_t)v;
+}
+
+uint16_t KRON_STRING_TO_UINT16(const char *s)
+{
+    double v = __kron_str_num(s);
+    if (v <= 0) return (uint16_t)0;
+    if (v >= 65535) return (uint16_t)65535;
+    return (uint16_t)v;
+}
+
+int32_t KRON_STRING_TO_INT32(const char *s)
+{
+    double v = __kron_str_num(s);
+    if (v <= -2147483648.0) return (int32_t)-2147483648.0;
+    if (v >= 2147483647.0) return (int32_t)2147483647.0;
+    return (int32_t)v;
+}
+
+uint32_t KRON_STRING_TO_UINT32(const char *s)
+{
+    double v = __kron_str_num(s);
+    if (v <= 0) return (uint32_t)0;
+    if (v >= 4294967295.0) return (uint32_t)4294967295.0;
+    return (uint32_t)v;
+}
+
+float KRON_STRING_TO_REAL(const char *s)
+{
+    return (float)__kron_str_num(s);
+}
+
+
+char *KRON_BOOL_TO_STRING(bool v, char *out, size_t n)
+{
+    return __kron_strcpy(out, n, v ? "TRUE" : "FALSE");
+}
+
+char *KRON_BYTE_TO_STRING(uint8_t v, char *out, size_t n)
+{
+    if (out && n) snprintf(out, n, "%u", (unsigned)v);
+    return out;
+}
+
+char *KRON_WORD_TO_STRING(uint16_t v, char *out, size_t n)
+{
+    if (out && n) snprintf(out, n, "%u", (unsigned)v);
+    return out;
+}
+
+char *KRON_DWORD_TO_STRING(uint32_t v, char *out, size_t n)
+{
+    if (out && n) snprintf(out, n, "%lu", (unsigned long)v);
+    return out;
+}
+
+char *KRON_INT16_TO_STRING(int16_t v, char *out, size_t n)
+{
+    if (out && n) snprintf(out, n, "%d", (int)v);
+    return out;
+}
+
+char *KRON_UINT16_TO_STRING(uint16_t v, char *out, size_t n)
+{
+    if (out && n) snprintf(out, n, "%u", (unsigned)v);
+    return out;
+}
+
+char *KRON_INT32_TO_STRING(int32_t v, char *out, size_t n)
+{
+    if (out && n) snprintf(out, n, "%ld", (long)v);
+    return out;
+}
+
+char *KRON_UINT32_TO_STRING(uint32_t v, char *out, size_t n)
+{
+    if (out && n) snprintf(out, n, "%lu", (unsigned long)v);
+    return out;
+}
+
+char *KRON_REAL_TO_STRING(float v, char *out, size_t n)
+{
+    if (out && n) snprintf(out, n, "%g", (double)v);
+    return out;
+}

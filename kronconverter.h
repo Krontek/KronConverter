@@ -31,6 +31,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>    /* size_t — the STRING section below */
 #define __int8_t_defined
 
 /*===========================================================================
@@ -212,5 +213,54 @@ int8_t   KRON_LREAL_TO_INT8  (double v);
 int16_t  KRON_LREAL_TO_INT16 (double v);
 int32_t  KRON_LREAL_TO_INT32 (double v);
 float    KRON_LREAL_TO_REAL  (double v);
+
+
+/*===========================================================================*
+ * STRING conversion  (IEC X_TO_Y for text)
+ *
+ * Declarations only — the bodies live in kronconverter.c, so a project that
+ * links the prebuilt libkron*.a must rebuild that archive for every target
+ * after any change here.
+ *
+ * Same KRON_<src>_TO_<dst> names the transpiler rewrites IEC calls to, so
+ * STRING_TO_INT(x) in ST and a STRING_TO_INT block in ladder both resolve.
+ *
+ * ⚠️ TO_STRING takes an OUTPUT BUFFER. A function returning a pointer would
+ * have to own storage, and every such answer is wrong here: a static buffer
+ * races between task threads, a thread-local rotating pool goes stale a few
+ * conversions later, and a compound literal dangles after the scan. The
+ * transpiler therefore gives every TO_STRING CALL SITE its own PlcState field
+ * and passes it in, so the text lives exactly as long as the instance does and
+ * survives a hot-swap. The function returns that same pointer for convenience.
+ *
+ * FROM_STRING parses a leading number and yields 0 when there is none. Use
+ * Str_To_Int / Str_To_Real when you need to TELL those apart — they carry an
+ * OK output, which a plain conversion function has nowhere to put.
+ *
+ * TO_STRING writes at most n bytes including the NUL and always terminates,
+ * truncating when the text does not fit; it returns out unchanged.
+ *===========================================================================*/
+
+/*----- FROM STRING -------------------------------------------------------*/
+bool     KRON_STRING_TO_BOOL  (const char *s);
+uint8_t  KRON_STRING_TO_BYTE  (const char *s);
+uint16_t KRON_STRING_TO_WORD  (const char *s);
+uint32_t KRON_STRING_TO_DWORD (const char *s);
+int16_t  KRON_STRING_TO_INT16 (const char *s);
+uint16_t KRON_STRING_TO_UINT16(const char *s);
+int32_t  KRON_STRING_TO_INT32 (const char *s);
+uint32_t KRON_STRING_TO_UINT32(const char *s);
+float    KRON_STRING_TO_REAL  (const char *s);
+
+/*----- TO STRING ---------------------------------------------------------*/
+char *KRON_BOOL_TO_STRING  (bool     v, char *out, size_t n);
+char *KRON_BYTE_TO_STRING  (uint8_t  v, char *out, size_t n);
+char *KRON_WORD_TO_STRING  (uint16_t v, char *out, size_t n);
+char *KRON_DWORD_TO_STRING (uint32_t v, char *out, size_t n);
+char *KRON_INT16_TO_STRING (int16_t  v, char *out, size_t n);
+char *KRON_UINT16_TO_STRING(uint16_t v, char *out, size_t n);
+char *KRON_INT32_TO_STRING (int32_t  v, char *out, size_t n);
+char *KRON_UINT32_TO_STRING(uint32_t v, char *out, size_t n);
+char *KRON_REAL_TO_STRING  (float    v, char *out, size_t n);
 
 #endif /* KRONCONVERTER_H */
