@@ -10,6 +10,33 @@
 #include <string.h>    /* strlen/memcpy */
 
 /*===========================================================================
+ * Float → integer conversion helpers
+ *
+ * In C, casting a floating-point value whose truncated value cannot be
+ * represented in the destination integer type is UNDEFINED behaviour
+ * (C11 6.3.1.4) — not implementation-defined. It is not "negative → 0 on
+ * ARM": the result may differ between x86_64 and the ARM targets this
+ * library is built for, and between optimisation levels on the same target.
+ *
+ * These helpers make the conversion total and identical everywhere by
+ * saturating to the destination range before the cast, and mapping NaN to 0.
+ * In-range values keep IEC truncation toward zero.
+ *===========================================================================*/
+static inline double kron_sat_d(double v, double lo, double hi) {
+    if (v != v)  return 0.0;   /* NaN → 0 */
+    if (v <= lo) return lo;
+    if (v >= hi) return hi;
+    return v;
+}
+
+static inline uint8_t  kron_f2u8 (double v) { return (uint8_t) kron_sat_d(v, 0.0, 255.0); }
+static inline uint16_t kron_f2u16(double v) { return (uint16_t)kron_sat_d(v, 0.0, 65535.0); }
+static inline uint32_t kron_f2u32(double v) { return (uint32_t)kron_sat_d(v, 0.0, 4294967295.0); }
+static inline int8_t   kron_f2i8 (double v) { return (int8_t)  kron_sat_d(v, -128.0, 127.0); }
+static inline int16_t  kron_f2i16(double v) { return (int16_t) kron_sat_d(v, -32768.0, 32767.0); }
+static inline int32_t  kron_f2i32(double v) { return (int32_t) kron_sat_d(v, -2147483648.0, 2147483647.0); }
+
+/*===========================================================================
  * FROM BOOL
  * true → 1, false → 0
  *===========================================================================*/
@@ -257,40 +284,42 @@ double   KRON_INT32_TO_LREAL (int32_t v) { return (double)v;        }
  * FROM REAL (float)
  * → BOOL   : 0.0f → false, any nonzero (incl. negative, NaN) → true
  *            Note: -0.0f == 0.0f in IEEE 754, so -0.0f → false
- * → BYTE/WORD/DWORD/UINT* : truncation toward zero; negative → 0 on ARM
- * → INT*   : truncation toward zero; out-of-range → implementation-defined
+ * → BYTE/WORD/DWORD/UINT* : truncation toward zero, saturating (negative → 0)
+ * → INT*   : truncation toward zero, saturating at the type's min/max
+ *            NaN → 0 for every integer target
  * → LREAL  : widening cast (always exact value)
  *===========================================================================*/
 bool     KRON_REAL_TO_BOOL  (float v) { return v != 0.0f;        }
-uint8_t  KRON_REAL_TO_BYTE  (float v) { return (uint8_t)v;       }
-uint16_t KRON_REAL_TO_WORD  (float v) { return (uint16_t)v;      }
-uint32_t KRON_REAL_TO_DWORD (float v) { return (uint32_t)v;      }
-uint8_t  KRON_REAL_TO_UINT8 (float v) { return (uint8_t)v;       }
-uint16_t KRON_REAL_TO_UINT16(float v) { return (uint16_t)v;      }
-uint32_t KRON_REAL_TO_UINT32(float v) { return (uint32_t)v;      }
-int8_t   KRON_REAL_TO_INT8  (float v) { return (int8_t)v;        }
-int16_t  KRON_REAL_TO_INT16 (float v) { return (int16_t)v;       }
-int32_t  KRON_REAL_TO_INT32 (float v) { return (int32_t)v;       }
+uint8_t  KRON_REAL_TO_BYTE  (float v) { return kron_f2u8(v);       }
+uint16_t KRON_REAL_TO_WORD  (float v) { return kron_f2u16(v);      }
+uint32_t KRON_REAL_TO_DWORD (float v) { return kron_f2u32(v);      }
+uint8_t  KRON_REAL_TO_UINT8 (float v) { return kron_f2u8(v);       }
+uint16_t KRON_REAL_TO_UINT16(float v) { return kron_f2u16(v);      }
+uint32_t KRON_REAL_TO_UINT32(float v) { return kron_f2u32(v);      }
+int8_t   KRON_REAL_TO_INT8  (float v) { return kron_f2i8(v);        }
+int16_t  KRON_REAL_TO_INT16 (float v) { return kron_f2i16(v);       }
+int32_t  KRON_REAL_TO_INT32 (float v) { return kron_f2i32(v);       }
 double   KRON_REAL_TO_LREAL (float v) { return (double)v;        }
 
 /*===========================================================================
  * FROM LREAL (double)
  * → BOOL   : 0.0 → false, any nonzero (incl. negative, NaN) → true
  *            Note: -0.0 == 0.0 in IEEE 754, so -0.0 → false
- * → BYTE/WORD/DWORD/UINT* : truncation toward zero; negative → 0 on ARM
- * → INT*   : truncation toward zero; out-of-range → implementation-defined
+ * → BYTE/WORD/DWORD/UINT* : truncation toward zero, saturating (negative → 0)
+ * → INT*   : truncation toward zero, saturating at the type's min/max
+ *            NaN → 0 for every integer target
  * → REAL   : narrowing cast; may lose precision for large or subnormal values
  *===========================================================================*/
 bool     KRON_LREAL_TO_BOOL  (double v) { return v != 0.0;         }
-uint8_t  KRON_LREAL_TO_BYTE  (double v) { return (uint8_t)v;       }
-uint16_t KRON_LREAL_TO_WORD  (double v) { return (uint16_t)v;      }
-uint32_t KRON_LREAL_TO_DWORD (double v) { return (uint32_t)v;      }
-uint8_t  KRON_LREAL_TO_UINT8 (double v) { return (uint8_t)v;       }
-uint16_t KRON_LREAL_TO_UINT16(double v) { return (uint16_t)v;      }
-uint32_t KRON_LREAL_TO_UINT32(double v) { return (uint32_t)v;      }
-int8_t   KRON_LREAL_TO_INT8  (double v) { return (int8_t)v;        }
-int16_t  KRON_LREAL_TO_INT16 (double v) { return (int16_t)v;       }
-int32_t  KRON_LREAL_TO_INT32 (double v) { return (int32_t)v;       }
+uint8_t  KRON_LREAL_TO_BYTE  (double v) { return kron_f2u8(v);       }
+uint16_t KRON_LREAL_TO_WORD  (double v) { return kron_f2u16(v);      }
+uint32_t KRON_LREAL_TO_DWORD (double v) { return kron_f2u32(v);      }
+uint8_t  KRON_LREAL_TO_UINT8 (double v) { return kron_f2u8(v);       }
+uint16_t KRON_LREAL_TO_UINT16(double v) { return kron_f2u16(v);      }
+uint32_t KRON_LREAL_TO_UINT32(double v) { return kron_f2u32(v);      }
+int8_t   KRON_LREAL_TO_INT8  (double v) { return kron_f2i8(v);        }
+int16_t  KRON_LREAL_TO_INT16 (double v) { return kron_f2i16(v);       }
+int32_t  KRON_LREAL_TO_INT32 (double v) { return kron_f2i32(v);       }
 float    KRON_LREAL_TO_REAL  (double v) { return (float)v;         }
 
 /*===========================================================================

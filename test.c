@@ -275,6 +275,42 @@ static void test_roundtrips(void)
 /*===========================================================================
  * main
  *===========================================================================*/
+static void test_float_saturation(void)
+{
+    printf("\n--- Float -> integer saturation (was undefined behaviour) ---\n");
+
+    /* Out-of-range float -> integer casts are UB in C, so these used to differ
+     * between x86_64 and the ARM targets. They now saturate everywhere. */
+    check("REAL -5.7 -> BYTE = 0",        KRON_REAL_TO_BYTE(-5.7f) == 0u);
+    check("REAL -1e9 -> UINT32 = 0",      KRON_REAL_TO_UINT32(-1e9f) == 0u);
+    check("REAL 1e9  -> WORD = 65535",    KRON_REAL_TO_WORD(1e9f) == 65535u);
+    check("REAL 1e20 -> DWORD = UINT32_MAX",
+          KRON_REAL_TO_DWORD(1e20f) == 4294967295u);
+    check("REAL 1e20 -> INT32 = INT32_MAX",
+          KRON_REAL_TO_INT32(1e20f) == 2147483647);
+    check("REAL -1e20 -> INT32 = INT32_MIN",
+          KRON_REAL_TO_INT32(-1e20f) == (-2147483647 - 1));
+    check("REAL 1000 -> INT8 = 127",      KRON_REAL_TO_INT8(1000.0f) == 127);
+    check("REAL -1000 -> INT8 = -128",    KRON_REAL_TO_INT8(-1000.0f) == -128);
+
+    check("LREAL -0.9 -> UINT16 = 0",     KRON_LREAL_TO_UINT16(-0.9) == 0u);
+    check("LREAL 1e30 -> INT32 = INT32_MAX",
+          KRON_LREAL_TO_INT32(1e30) == 2147483647);
+    check("LREAL -1e30 -> INT32 = INT32_MIN",
+          KRON_LREAL_TO_INT32(-1e30) == (-2147483647 - 1));
+    check("LREAL 70000 -> WORD = 65535",  KRON_LREAL_TO_WORD(70000.0) == 65535u);
+
+    /* NaN has no integer value at all — map it to 0 rather than to garbage. */
+    check("REAL NaN -> UINT32 = 0",       KRON_REAL_TO_UINT32(0.0f / 0.0f) == 0u);
+    check("LREAL NaN -> INT32 = 0",       KRON_LREAL_TO_INT32(0.0 / 0.0) == 0);
+
+    /* In-range values keep plain IEC truncation toward zero. */
+    check("REAL 3.9 -> INT8 = 3",         KRON_REAL_TO_INT8(3.9f) == 3);
+    check("REAL -3.9 -> INT8 = -3",       KRON_REAL_TO_INT8(-3.9f) == -3);
+    check("LREAL 255.9 -> BYTE = 255",    KRON_LREAL_TO_BYTE(255.9) == 255u);
+    check("REAL 0.0 -> BYTE = 0",         KRON_REAL_TO_BYTE(0.0f) == 0u);
+}
+
 int main(void)
 {
     printf("=== KronConverter Test Suite ===\n");
@@ -289,6 +325,7 @@ int main(void)
     test_from_int32();
     test_from_real();
     test_roundtrips();
+    test_float_saturation();
 
     printf("\n=== Results: %d passed, %d failed ===\n", pass_count, fail_count);
     return (fail_count == 0) ? 0 : 1;
